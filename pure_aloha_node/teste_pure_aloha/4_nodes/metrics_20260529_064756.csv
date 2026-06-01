@@ -1,0 +1,5 @@
+node_id;dev_eui;toa_teorico_ms;transacao_real_avg_ms;transacao_real_min_ms;transacao_real_max_ms;overhead_factor;duty_cycle_rf_%;ocupacao_no_%;periodo_nominal_s;periodo_real_avg_s;desvio_periodo_ms;interval_std_s;retries_total;retries_rate_%;link_margin_avg_db;link_margin_min_db
+1;9e70e30d570f93f5;97.536;97.0;97;97;0.99;0.35;0.33;28;29.42;1420.0;0.358;0;0.0;99.6;21
+2;788410651972aca8;97.536;97.0;97;97;0.99;0.33;0.31;30;31.42;1420.0;0.353;0;0.0;98.1;93
+3;dc63358a5a95d62f;97.536;97.0;97;97;0.99;0.3;0.29;32;33.4;1400.0;0.313;0;0.0;105.3;23
+4;1573451f0dff21d1;97.536;97.0;97;97;0.99;0.29;0.27;34;35.4;1400.0;0.31;0;0.0;107.7;26

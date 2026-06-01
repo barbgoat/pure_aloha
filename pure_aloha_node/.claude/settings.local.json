@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Eduardo Barbosa/Documents/Arduino/libraries/RadioLib/src/protocols/LoRaWAN/**)",
+      "Bash(del \"c:\\\\Users\\\\Eduardo Barbosa\\\\Documents\\\\Arduino\\\\pure_aloha\\\\pure_aloha_node\\\\nonces_nvs.h\")",
+      "PowerShell($files = Get-ChildItem -Path \"c:\\\\Users\\\\Eduardo Barbosa\\\\Documents\\\\Arduino\\\\pure_aloha\\\\pure_aloha_node\\\\Dados\" -Recurse -Force; foreach\\($f in $files\\) { Write-Host \"$\\($f.FullName\\) - Size: $\\($f.Length\\) bytes\" })"
+    ]
+  }
+}

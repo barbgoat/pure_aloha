@@ -1,0 +1,3 @@
+node_id,dev_eui,toa_teorico_ms,transacao_real_avg_ms,transacao_real_min_ms,transacao_real_max_ms,overhead_factor,duty_cycle_rf_%,ocupacao_no_%,periodo_nominal_s,periodo_real_avg_s,desvio_periodo_ms,interval_std_s,retries_total,retries_rate_%,link_margin_avg_db,link_margin_min_db
+1,9e70e30d570f93f5,616.448,616.0,616,616,1.0,2.2,2.03,28,30.34,2340.0,0.093,0,0.0,116.6,110
+4,1573451f0dff21d1,616.448,616.0,616,616,1.0,1.81,1.69,34,36.41,2410.0,0.305,0,0.0,102.1,30

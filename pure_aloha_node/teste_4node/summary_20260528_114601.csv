@@ -1,0 +1,29 @@
+parameter,value
+session_start,2026-05-28 10:35:19
+session_end,2026-05-28 11:46:01
+duration_min,70.7
+""
+n_nodes,2
+nodes,"No 1, No 4"
+n_rejoins,9
+""
+toa_teorico_avg_ms,616.45
+G_calc_method,tx_attempt_count (directo)
+traffic_load_G_real,0.0166
+P_collision_theory_%,3.26
+utilizacao_canal_total_%,3.23
+""
+total_tx,230
+total_rx,222
+total_lost,8
+pdr_uplink_%,96.52
+""
+collisions_fcnt_gap,8
+collision_fcnt_rate_%,3.48
+collisions_temporal,3
+collision_temporal_rate_%,1.35
+pdr_plus_collision_%,100.0
+""
+rssi_mean_dBm,-43.79
+snr_mean_dB,5.8
+link_margin_mean_dB,85.21
