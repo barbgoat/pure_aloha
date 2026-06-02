@@ -14,7 +14,8 @@ import re
 import signal
 import statistics
 import threading
-import requests
+# import requests  # REST — removido na migração para gRPC
+from gateway_api import flush_dev_nonces
 
 app = Flask(__name__)
 
@@ -35,8 +36,16 @@ ACTIVE_DEVICES = {}
 JOIN_EVENTS = []
 GLOBAL_TIMESTAMPS_LOG = []
 
-CHIRPSTACK_API = "http://192.168.0.1:8090/api"
-API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJjaGlycHN0YWNrIiwiaXNzIjoiY2hpcnBzdGFjayIsInN1YiI6Ijg0ZDE4NmMyLTIxMmMtNDUyNC1iYTlhLWRiYWJlMDc1NTcwYiIsInR5cCI6ImtleSJ9.M9eNakDVt0NjYIJxlBXjF2yZlq_Y0lDK-87Hjjcg9Zk"
+PERIODOS_NOMINAIS = {1: 14.0, 2: 14.5, 3: 15.0, 4: 15.5}
+INTERVAL_MAX_MS   = 300_000   # 5 min — exclui gaps de rejoin de periodo_real e jitter
+
+# ── Credenciais antigas — ChirpStack anterior (REST, porta 8090) ───────────
+# CHIRPSTACK_API = "http://192.168.0.1:8090/api"
+# API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJjaGlycHN0YWNrIiwi\
+#            aXNzIjoiY2hpcnBzdGFjayIsInN1YiI6Ijg0ZDE4NmMyLTIxMmMtNDUyNC1iYTlhLW\
+#            RiYWJlMDc1NTcwYiIsInR5cCI6ImtleSJ9.M9eNakDVt0NjYIJxlBXjF2yZlq_Y0lD\
+#            K-87Hjjcg9Zk"
+# ── Novo ChirpStack (gRPC, porta 8080) — credenciais em gateway_api.py ─────
 
 
 def compute_toa_ms(sf: int, bw_hz: int, payload_bytes: int,
@@ -53,28 +62,28 @@ def compute_toa_ms(sf: int, bw_hz: int, payload_bytes: int,
     return round(t_preamble_ms + t_payload_ms, 3)
 
 
-def flush_device_nonces(dev_eui):
-    """Flush OTAA nonces ChirpStack"""
-    if not API_KEY:
-        return False
+# ── flush_device_nonces (REST) — comentado após migração para gRPC ──────────
+# Substituir por flush_dev_nonces() importado de gateway_api.py (gRPC):
+#   from gateway_api import flush_dev_nonces
+#
+# def flush_device_nonces(dev_eui):
+#     """Flush OTAA nonces via REST — ChirpStack anterior (porta 8090)"""
+#     if not API_KEY:
+#         return False
+#     url = f"{CHIRPSTACK_API}/devices/{dev_eui}/dev-nonces"
+#     headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+#     try:
+#         response = requests.delete(url, headers=headers)
+#         if response.status_code == 200:
+#             print(f"[FLUSH] Device {dev_eui[-8:]} nonces cleared")
+#             return True
+#         else:
+#             print(f"[FLUSH] Failed {dev_eui[-8:]}: {response.status_code}")
+#             return False
+#     except Exception as e:
+#         print(f"[FLUSH] Error {dev_eui[-8:]}: {e}")
+#         return False
 
-    url = f"{CHIRPSTACK_API}/devices/{dev_eui}/dev-nonces"
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    try:
-        response = requests.delete(url, headers=headers)
-        if response.status_code == 200:
-            print(f"[FLUSH] Device {dev_eui[-8:]} nonces cleared")
-            return True
-        else:
-            print(f"[FLUSH] Failed {dev_eui[-8:]}: {response.status_code}")
-            return False
-    except Exception as e:
-        print(f"[FLUSH] Error {dev_eui[-8:]}: {e}")
-        return False
 
 
 def extract_radio_params(data: dict) -> dict:
@@ -97,7 +106,7 @@ def extract_radio_params(data: dict) -> dict:
     }
 
 
-@app.route('/webhook', methods=['POST'])
+@app.route('/uplink', methods=['POST'])
 def webhook():
     with LOCK:
         try:
@@ -118,9 +127,9 @@ def webhook():
                 if dev_eui in NODE_COUNTERS:
                     old = NODE_COUNTERS[dev_eui]
 
-                    if API_KEY and old.get('session_id', 1) >= 3:
+                    if old.get('session_id', 1) >= 3:
                         print(f"[AUTO-FLUSH] Device {dev_eui[-8:]} session {old['session_id']} - flushing...")
-                        flush_device_nonces(dev_eui)
+                        flush_dev_nonces(dev_eui)
 
                     old_session = {
                         'session_id': old['session_id'],
@@ -184,7 +193,6 @@ def webhook():
             toa_teorico_ms = radio['toa_teorico_ms']
 
             collisions_detected = 0
-            PERIODOS_NOMINAIS = {1: 28, 2: 30, 3: 32, 4: 34}
 
             if dev_eui not in NODE_COUNTERS:
                 NODE_COUNTERS[dev_eui] = {
@@ -193,7 +201,7 @@ def webhook():
                     'collisions': 0,
                     'rx_count': 1,
                     'node_id': node_id,
-                    'periodo_nominal_s': PERIODOS_NOMINAIS.get(node_id, 30),
+                    'periodo_nominal_s': PERIODOS_NOMINAIS.get(node_id, 15),
                     'session_id': 1,
                     'sessions': [],
                     'sf': sf,
@@ -207,6 +215,7 @@ def webhook():
                     'retry_list': [],
                     'sendreceive_list': [],
                     'last_tx_attempt_count': tx_attempt_count,
+                    'offset_samples': [],   # (elapsed_s, offset_raw_ms) para calibração de relógio
                 }
                 print(f"[NEW NODE] No {node_id} FCnt={f_cnt} SF={sf} BW={bw_khz}kHz ToA={toa_teorico_ms}ms")
             else:
@@ -271,6 +280,21 @@ def webhook():
             if toa_teorico_ms:
                 NODE_COUNTERS[dev_eui]['toa_teo_acumulado_ms'] += toa_teorico_ms
 
+            # offset_raw = ts_gateway_rx_epoch_ms - node_millis - ToA
+            # Diferenças consecutivas deste valor medem o drift do relógio do nó vs gateway.
+            # O valor absoluto é dominado pelo offset de epoch (sem significado directo);
+            # o que importa é o slope ao longo do tempo (ppm de drift).
+            offset_raw_ms = None
+            if node_millis is not None and toa_teorico_ms:
+                try:
+                    ts_dt       = parse_ts(timestamp)
+                    ts_epoch_ms = ts_dt.timestamp() * 1000.0
+                    elapsed_s   = (ts_dt.replace(tzinfo=None) - SESSION_START).total_seconds()
+                    offset_raw_ms = round(ts_epoch_ms - node_millis - toa_teorico_ms, 1)
+                    NODE_COUNTERS[dev_eui]['offset_samples'].append((elapsed_s, offset_raw_ms))
+                except Exception:
+                    pass
+
             sensitivity_map = {7: -120, 8: -123, 9: -126, 10: -129, 11: -132, 12: -137}
             sensitivity = sensitivity_map.get(sf, -120)
             link_margin = rssi - sensitivity if rssi else None
@@ -313,6 +337,7 @@ def webhook():
                 'node_millis': node_millis,
                 'sendreceive_ms': sendreceive_ms,
                 'link_margin_db': round(link_margin, 1) if link_margin else None,
+                'offset_raw_ms': offset_raw_ms,
             }
 
             GLOBAL_TIMESTAMPS_LOG.append({
@@ -323,6 +348,7 @@ def webhook():
                 'toa_teorico_ms': toa_teorico_ms,
                 'rssi': rssi,
                 'snr': snr,
+                'frequency_mhz': radio['frequency_mhz'],
             })
 
             SESSION_DATA.append(frame)
@@ -399,34 +425,92 @@ def status():
         })
 
 
+def compute_clock_calibration(node_counters):
+    """Regressão linear do offset (ts_gateway - node_millis - ToA) ao longo do tempo.
+
+    Retorna por nó:
+      offset_base_ms   — offset no t=0 da sessão (intercepto)
+      offset_mean_ms   — média simples dos offsets
+      offset_std_ms    — desvio padrão dos offsets (estabilidade bruta)
+      residual_std_ms  — desvio padrão dos resíduos após remoção do drift linear
+      drift_ppm        — taxa de drift (slope em ms/s × 1000 = ppm)
+      drift_ms_per_hour — drift em ms/hora (mais intuitivo)
+      slope_ms_per_s   — slope bruto para uso interno
+    """
+    calibration = {}
+    for dev_eui, stats in node_counters.items():
+        samples = stats.get('offset_samples', [])
+        if len(samples) < 3:
+            calibration[dev_eui] = None
+            continue
+
+        xs = [s[0] for s in samples]   # elapsed_s desde o início da sessão
+        ys = [s[1] for s in samples]   # offset_raw_ms
+        n  = len(samples)
+
+        mean_x = sum(xs) / n
+        mean_y = sum(ys) / n
+        var_x  = sum((x - mean_x) ** 2 for x in xs)
+        cov_xy = sum((xs[i] - mean_x) * (ys[i] - mean_y) for i in range(n))
+
+        slope     = cov_xy / var_x if var_x > 0 else 0.0  # ms/s
+        intercept = mean_y - slope * mean_x                # offset no t=0
+
+        residuals    = [ys[i] - (slope * xs[i] + intercept) for i in range(n)]
+        residual_std = statistics.stdev(residuals) if n > 1 else 0.0
+
+        calibration[dev_eui] = {
+            'offset_base_ms':    round(intercept, 1),
+            'offset_mean_ms':    round(mean_y, 1),
+            'offset_std_ms':     round(statistics.stdev(ys), 2) if n > 1 else 0.0,
+            'residual_std_ms':   round(residual_std, 2),
+            'drift_ppm':         round(slope * 1000, 2),
+            'drift_ms_per_hour': round(slope * 3600, 2),
+            'slope_ms_per_s':    round(slope, 6),
+            'n_samples':         n,
+        }
+
+    return calibration
+
+
 def detect_temporal_collisions(frames):
-    """Detecta colisões via overlap temporal de transmissões"""
+    """Detecta colisões via overlap temporal. Canais diferentes confirmados são excluídos
+    (EU868: 8 canais ortogonais — overlap temporal em frequências distintas não é colisão)."""
     frames_sorted = sorted(frames, key=lambda f: f.get('timestamp', ''))
     temporal_collisions = []
 
     for i in range(1, len(frames_sorted)):
-        atual = frames_sorted[i]
+        atual    = frames_sorted[i]
         anterior = frames_sorted[i-1]
 
+        freq_atual    = atual.get('frequency_mhz')
+        freq_anterior = anterior.get('frequency_mhz')
+
+        # Canais diferentes confirmados → sem colisão RF
+        if freq_atual and freq_anterior and freq_atual != freq_anterior:
+            continue
+
         try:
-            ts_rx_atual = parse_ts(atual['timestamp'])
+            ts_rx_atual    = parse_ts(atual['timestamp'])
             ts_rx_anterior = parse_ts(anterior['timestamp'])
 
-            toa_atual_s = atual.get('toa_teorico_ms', 616) / 1000.0
-            # FIX: era datetime.timedelta (AttributeError silencioso) — corrigido para timedelta
+            toa_atual_s    = atual.get('toa_teorico_ms', 616) / 1000.0
             tx_start_atual = ts_rx_atual - timedelta(seconds=toa_atual_s)
 
             if tx_start_atual < ts_rx_anterior:
                 overlap_s = (ts_rx_anterior - tx_start_atual).total_seconds()
                 temporal_collisions.append({
-                    'timestamp': atual['timestamp'],
-                    'node_atual': atual.get('node_id'),
-                    'fcnt_atual': atual.get('f_cnt'),
-                    'node_anterior': anterior.get('node_id'),
-                    'fcnt_anterior': anterior.get('f_cnt'),
-                    'overlap_s': round(overlap_s, 3),
-                    'sf_atual': atual.get('sf'),
-                    'sf_anterior': anterior.get('sf'),
+                    'timestamp':          atual['timestamp'],
+                    'node_atual':         atual.get('node_id'),
+                    'fcnt_atual':         atual.get('f_cnt'),
+                    'node_anterior':      anterior.get('node_id'),
+                    'fcnt_anterior':      anterior.get('f_cnt'),
+                    'overlap_s':          round(overlap_s, 3),
+                    'sf_atual':           atual.get('sf'),
+                    'sf_anterior':        anterior.get('sf'),
+                    'freq_atual_mhz':     freq_atual,
+                    'freq_anterior_mhz':  freq_anterior,
+                    'canal_confirmado':   freq_atual is not None and freq_anterior is not None,
                 })
         except Exception:
             pass
@@ -455,20 +539,22 @@ def export_session():
         temporal_cols_path = os.path.join(results_dir, f"temporal_collisions_{ts}.csv")
         sf_dist_path       = os.path.join(results_dir, f"sf_distribution_{ts}.csv")
         global_ts_path     = os.path.join(results_dir, f"global_timestamps_{ts}.csv")
+        clock_cal_path     = os.path.join(results_dir, f"clock_calibration_{ts}.csv")
 
-        # FIX: calculado uma vez e passado às duas funções — antes chamado duas vezes
         temporal_cols = detect_temporal_collisions(SESSION_DATA)
+        calibration   = compute_clock_calibration(NODE_COUNTERS)
 
-        _export_raw_csv(csv_path)
-        _export_summary_csv(summary_path, temporal_cols)
+        _export_raw_csv(csv_path, calibration)
+        _export_summary_csv(summary_path, temporal_cols, calibration)
         _export_nodes_csv(nodes_path)
         _export_collisions_csv(collisions_path)
         _export_joins_csv(joins_path)
-        _export_metrics_csv(metrics_path)
+        _export_metrics_csv(metrics_path, calibration)
         _export_airtime_csv(airtime_path)
         _export_temporal_collisions_csv(temporal_cols_path, temporal_cols)
         _export_sf_distribution_csv(sf_dist_path)
         _export_global_timestamps_csv(global_ts_path)
+        _export_clock_calibration_csv(clock_cal_path, calibration)
 
         print(f"\n{'='*70}")
         print(f"  EXPORT COMPLETE")
@@ -482,6 +568,7 @@ def export_session():
         print(f"  Joins:             {joins_path}")
         print(f"  SF Distribution:   {sf_dist_path}")
         print(f"  Global Timestamps: {global_ts_path}")
+        print(f"  Clock Calibration: {clock_cal_path}")
         print(f"{'='*70}\n")
 
 
@@ -520,9 +607,25 @@ def _compute_window_stats(frames_sorted, window_size=20):
     return results
 
 
-def _export_raw_csv(path):
+def _export_raw_csv(path, calibration=None):
     frames_sorted = sorted(SESSION_DATA, key=lambda f: f.get('timestamp', ''))
     window_stats  = _compute_window_stats(frames_sorted)
+
+    def _offset_residuo(frame):
+        if not calibration:
+            return None
+        cal = calibration.get(frame.get('dev_eui'))
+        if cal is None:
+            return None
+        raw = frame.get('offset_raw_ms')
+        if raw is None:
+            return None
+        try:
+            elapsed_s = (parse_ts(frame['timestamp']) - SESSION_START).total_seconds()
+        except Exception:
+            return None
+        expected = cal['slope_ms_per_s'] * elapsed_s + cal['offset_base_ms']
+        return round(raw - expected, 2)
 
     with open(path, 'w', newline='') as f:
         fields = [
@@ -534,36 +637,40 @@ def _export_raw_csv(path):
             'sf', 'bw_khz', 'toa_teorico_ms', 'frequency_mhz',
             'transacao_real_ms', 'interval_real_ms', 'airtime_total_ms', 'retry_count',
             'tx_attempt_count', 'node_millis', 'sendreceive_ms',
+            'offset_raw_ms', 'offset_residuo_ms',
             'G_window', 'S_window',
         ]
         writer = csv.DictWriter(f, fieldnames=fields, extrasaction='ignore')
         writer.writeheader()
         for frame, ws in zip(frames_sorted, window_stats):
             row = dict(frame)
-            row['collision_free'] = frame.get('collision_free', frame.get('collisions_detected', 0) == 0)
-            row['G_window'] = ws['G_window']
-            row['S_window'] = ws['S_window']
+            row['collision_free']     = frame.get('collision_free', frame.get('collisions_detected', 0) == 0)
+            row['G_window']           = ws['G_window']
+            row['S_window']           = ws['S_window']
+            row['offset_residuo_ms']  = _offset_residuo(frame)
             writer.writerow(row)
     print(f"[EXPORT] Raw: {path} ({len(SESSION_DATA)} frames)")
 
 
-def _export_metrics_csv(path):
+def _export_metrics_csv(path, calibration=None):
     with open(path, 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow([
             'node_id', 'dev_eui',
             'toa_teorico_ms', 'duty_cycle_rf_%', 'ocupacao_no_%',
             'periodo_nominal_s', 'periodo_real_avg_s', 'interval_std_s',
+            'interval_gateway_avg_s', 'interval_delta_avg_ms',
             'sr_teorico_ms', 'sr_avg_ms', 'sr_std_ms', 'sr_min_ms', 'sr_max_ms',
             'sr_elevado_n', 'sr_elevado_%',
             'link_margin_avg_db', 'link_margin_min_db',
+            'drift_ppm', 'residual_std_ms',
         ])
 
         for dev_eui, stats in sorted(NODE_COUNTERS.items(), key=lambda x: x[1]['node_id']):
             node_id  = stats['node_id']
             toa_teo  = stats.get('toa_teorico_ms', 616)
 
-            interval_list    = stats.get('interval_real_list', [])
+            interval_list    = [x for x in stats.get('interval_real_list', []) if 0 < x < INTERVAL_MAX_MS]
             periodo_real_avg = round(sum(interval_list)/len(interval_list)/1000, 2) if interval_list else None
             periodo_nom      = stats.get('periodo_nominal_s', 28)
             jitter           = round(statistics.stdev(interval_list) / 1000, 3) if len(interval_list) > 1 else None
@@ -588,33 +695,53 @@ def _export_metrics_csv(path):
             sr_elevado_n   = sum(1 for s in sr_list if s > 2000)
             sr_elevado_pct = round(sr_elevado_n / len(sr_list) * 100, 2) if sr_list else None
 
+            # Cross-validation: intervalo medido no gateway vs intervalo reportado pelo nó
+            # interval_delta > 0 → nó reporta intervalos maiores que o gateway vê (clock mais lento)
+            # interval_delta < 0 → nó reporta intervalos menores (clock mais rápido)
+            gateway_intervals = stats.get('intervals', [])
+            interval_gateway_avg = round(sum(gateway_intervals) / len(gateway_intervals), 3) if gateway_intervals else None
+            if interval_gateway_avg and periodo_real_avg:
+                interval_delta_avg_ms = round((periodo_real_avg - interval_gateway_avg) * 1000, 1)
+            else:
+                interval_delta_avg_ms = None
+
+            cal = calibration.get(dev_eui) if calibration else None
+            drift_ppm       = cal['drift_ppm']       if cal else None
+            residual_std_ms = cal['residual_std_ms'] if cal else None
+
             writer.writerow([
                 node_id, dev_eui,
                 toa_teo, duty_cycle_rf, ocupacao_no,
                 periodo_nom, periodo_real_avg, jitter,
+                interval_gateway_avg, interval_delta_avg_ms,
                 sr_teorico, sr_avg, sr_std, sr_min, sr_max,
                 sr_elevado_n, sr_elevado_pct,
                 margin_avg, margin_min,
+                drift_ppm, residual_std_ms,
             ])
 
     print(f"[EXPORT] Metrics: {path}")
 
-    print(f"\n{'-'*100}")
-    print(f"  {'No':<4} {'ToA_Teo':<10} {'Duty_RF':<9} {'Ocup_No':<9} {'Periodo_Nom':<13} {'Periodo_Real':<14} {'SR_avg':<10} {'SR_elevado'}")
-    print(f"{'-'*100}")
+    print(f"\n{'-'*110}")
+    print(f"  {'No':<4} {'ToA_Teo':<10} {'Duty_RF':<9} {'P_Nom':<8} {'P_Real_No':<12} {'P_GW':<12} {'Delta_ms':<10} {'Drift_ppm':<11} {'SR_elev'}")
+    print(f"{'-'*110}")
     for dev_eui, stats in sorted(NODE_COUNTERS.items(), key=lambda x: x[1]['node_id']):
-        node_id      = stats['node_id']
-        toa_teo      = stats.get('toa_teorico_ms', 616)
-        periodo_nom  = stats.get('periodo_nominal_s', 28)
-        interval_list = stats.get('interval_real_list', [])
-        periodo_real = round(sum(interval_list)/len(interval_list)/1000, 2) if interval_list else 0
-        duty_rf      = round((toa_teo / (periodo_nom * 1000)) * 100, 2)
-        ocup_no      = round((toa_teo / (periodo_real * 1000)) * 100, 2) if periodo_real else 0
-        sr_list      = stats.get('sendreceive_list', [])
-        sr_avg       = round(sum(sr_list)/len(sr_list), 0) if sr_list else 0
-        sr_elev_pct  = round(sum(1 for s in sr_list if s > 2000) / len(sr_list) * 100, 1) if sr_list else 0
-        print(f"  {str(node_id):<4} {toa_teo:<10} {duty_rf:<9}% {ocup_no:<9}% {periodo_nom:<13}s {periodo_real:<14}s {sr_avg:<10}ms {sr_elev_pct}%")
-    print(f"{'-'*100}\n")
+        node_id       = stats['node_id']
+        toa_teo       = stats.get('toa_teorico_ms', 616)
+        periodo_nom   = stats.get('periodo_nominal_s', 28)
+        interval_list = [x for x in stats.get('interval_real_list', []) if 0 < x < INTERVAL_MAX_MS]
+        periodo_real  = round(sum(interval_list)/len(interval_list)/1000, 2) if interval_list else 0
+        gw_intervals  = stats.get('intervals', [])
+        periodo_gw    = round(sum(gw_intervals)/len(gw_intervals), 2) if gw_intervals else 0
+        delta_ms      = round((periodo_real - periodo_gw) * 1000, 1) if (periodo_real and periodo_gw) else 0
+        duty_rf       = round((toa_teo / (periodo_nom * 1000)) * 100, 2)
+        sr_list       = stats.get('sendreceive_list', [])
+        sr_elev_pct   = round(sum(1 for s in sr_list if s > 2000) / len(sr_list) * 100, 1) if sr_list else 0
+        # drift_ppm from calibration (already computed above in the loop, re-fetch)
+        cal_node = calibration.get(dev_eui) if calibration else None
+        drift_ppm_val = cal_node['drift_ppm'] if cal_node else 'N/A'
+        print(f"  {str(node_id):<4} {toa_teo:<10} {duty_rf:<9}% {periodo_nom:<8}s {periodo_real:<12}s {periodo_gw:<12}s {delta_ms:<10}ms {str(drift_ppm_val):<11} {sr_elev_pct}%")
+    print(f"{'-'*110}\n")
 
 
 def _export_airtime_csv(path):
@@ -649,7 +776,7 @@ def _export_airtime_csv(path):
     print(f"[EXPORT] Airtime: {path}")
 
 
-def _export_summary_csv(path, temporal_cols=None):
+def _export_summary_csv(path, temporal_cols=None, calibration=None):
     if not SESSION_DATA:
         return
 
@@ -696,7 +823,7 @@ def _export_summary_csv(path, temporal_cols=None):
             G_real += (last_attempt * toa_g / 1000) / duration_s
             attempt_nodes += 1
         else:
-            intervals_g = [x for x in stats_g.get('interval_real_list', []) if 0 < x < 300000]
+            intervals_g = [x for x in stats_g.get('interval_real_list', []) if 0 < x < INTERVAL_MAX_MS]
             if intervals_g:
                 avg_interval_s = (sum(intervals_g) / len(intervals_g)) / 1000
                 if avg_interval_s > 0:
@@ -708,7 +835,7 @@ def _export_summary_csv(path, temporal_cols=None):
         g_method = f'misto ({attempt_nodes}/{len(NODE_COUNTERS)} nos com payload v3.0)'
 
     n_outliers = sum(
-        len([x for x in stats.get('interval_real_list', []) if x >= 300000])
+        len([x for x in stats.get('interval_real_list', []) if x >= INTERVAL_MAX_MS])
         for stats in NODE_COUNTERS.values()
     )
     if n_outliers:
@@ -718,6 +845,7 @@ def _export_summary_csv(path, temporal_cols=None):
     P_collision_theory    = (1 - math.exp(-2 * G_real)) * 100 if G_real > 0 else 0
     n_temporal_collisions = len(temporal_cols)
     temporal_col_rate     = (n_temporal_collisions / total_rx * 100) if total_rx > 0 else 0
+    pdr_canal             = total_rx / (total_rx + n_temporal_collisions) * 100 if (total_rx + n_temporal_collisions) > 0 else 0
 
     rx_sem_colisao      = sum(1 for f in SESSION_DATA
                               if f.get('collision_free', f.get('collisions_detected', 0) == 0))
@@ -756,6 +884,7 @@ def _export_summary_csv(path, temporal_cols=None):
             ['collisions_fcnt_gap',       total_collisions],
             ['collision_rate_temporal_%', round(temporal_col_rate, 2)],
             ['collisions_temporal',       n_temporal_collisions],
+            ['pdr_canal_%',               round(pdr_canal, 2)],
             ['pdr_plus_collision_%',      round(pdr_global + collision_rate, 2)],
             [''],
             ['rssi_mean_dBm',       round(rssi_mean, 2)],
@@ -771,11 +900,18 @@ def _export_summary_csv(path, temporal_cols=None):
     print(f"  PDR:               {pdr_global:.1f}%")
     print(f"  Colisoes FCnt:     {total_collisions}  ({collision_rate:.1f}%)")
     print(f"  Colisoes Temporal: {n_temporal_collisions}  ({temporal_col_rate:.1f}%)")
+    print(f"  PDR Canal:         {pdr_canal:.2f}%")
     print(f"  Traffic Load G:    {G_real:.4f}")
     print(f"  P_colisao teorica: {P_collision_theory:.2f}%")
     print(f"  S_observado:       {S_observado:.4f}")
     print(f"  S_pureALOHA_teo:   {S_pure_aloha_teoria:.4f}  (G·e^-2G)")
     print(f"  Utilizacao Canal:  {utilizacao_canal:.2f}%")
+    if calibration:
+        drifts = [(NODE_COUNTERS[d]['node_id'], c['drift_ppm'])
+                  for d, c in calibration.items() if c is not None]
+        if drifts:
+            drift_str = '  '.join(f"No{nid}:{dppm:+.1f}ppm" for nid, dppm in sorted(drifts))
+            print(f"  Clock Drift:       {drift_str}")
     print(f"{'='*70}\n")
 
 
@@ -845,16 +981,57 @@ def _export_temporal_collisions_csv(path, temporal_cols=None):
         writer.writerow([
             'timestamp', 'node_atual', 'fcnt_atual',
             'node_anterior', 'fcnt_anterior',
-            'overlap_s', 'sf_atual', 'sf_anterior'
+            'overlap_s', 'sf_atual', 'sf_anterior',
+            'freq_atual_mhz', 'freq_anterior_mhz', 'canal_confirmado',
         ])
         for col in temporal_cols:
             writer.writerow([
                 col['timestamp'], col['node_atual'], col['fcnt_atual'],
                 col['node_anterior'], col['fcnt_anterior'],
-                col['overlap_s'], col['sf_atual'], col['sf_anterior']
+                col['overlap_s'], col['sf_atual'], col['sf_anterior'],
+                col.get('freq_atual_mhz'), col.get('freq_anterior_mhz'), col.get('canal_confirmado'),
             ])
 
     print(f"[EXPORT] Temporal Collisions: {path} ({len(temporal_cols)} events)")
+
+
+def _export_clock_calibration_csv(path, calibration):
+    """Exporta calibração de relógio por nó: drift, offset, estabilidade."""
+    with open(path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            'node_id', 'dev_eui', 'n_samples',
+            'offset_base_ms', 'offset_mean_ms', 'offset_std_ms', 'residual_std_ms',
+            'drift_ppm', 'drift_ms_per_hour',
+        ])
+        for dev_eui, stats in sorted(NODE_COUNTERS.items(), key=lambda x: x[1]['node_id']):
+            cal = calibration.get(dev_eui)
+            if cal is None:
+                writer.writerow([stats['node_id'], dev_eui, len(stats.get('offset_samples', [])),
+                                  None, None, None, None, None, None])
+                continue
+            writer.writerow([
+                stats['node_id'], dev_eui, cal['n_samples'],
+                cal['offset_base_ms'], cal['offset_mean_ms'],
+                cal['offset_std_ms'], cal['residual_std_ms'],
+                cal['drift_ppm'], cal['drift_ms_per_hour'],
+            ])
+
+    print(f"[EXPORT] Clock Calibration: {path}")
+    print(f"\n{'-'*90}")
+    print(f"  CLOCK CALIBRATION (offset = ts_gateway_rx - node_millis - ToA):")
+    print(f"  {'No':<4} {'Samples':<9} {'Drift_ppm':<12} {'Drift_ms/h':<13} {'Offset_base_ms':<17} {'Residual_std_ms'}")
+    print(f"{'-'*90}")
+    for dev_eui, stats in sorted(NODE_COUNTERS.items(), key=lambda x: x[1]['node_id']):
+        cal = calibration.get(dev_eui)
+        if cal is None:
+            print(f"  {stats['node_id']:<4} {'<3 amostras — sem calibração'}")
+            continue
+        stability = "ESTAVEL" if abs(cal['drift_ppm']) < 50 and cal['residual_std_ms'] < 5 else "DERIVA"
+        print(f"  {stats['node_id']:<4} {cal['n_samples']:<9} {cal['drift_ppm']:<12} "
+              f"{cal['drift_ms_per_hour']:<13} {cal['offset_base_ms']:<17} "
+              f"{cal['residual_std_ms']}  [{stability}]")
+    print(f"{'-'*90}\n")
 
 
 def _export_collisions_csv(path):
@@ -926,10 +1103,9 @@ def _export_sf_distribution_csv(path):
 def _export_global_timestamps_csv(path):
     sorted_log = sorted(GLOBAL_TIMESTAMPS_LOG, key=lambda x: x['timestamp'])
 
-    # --- passo 1: calcular delta_t_ms e observation para cada frame ---
+    # --- passo 1: calcular delta_t_ms e observation base para cada frame ---
     rows = []
     last_ts_dt = None
-    potenciais_3s = 0
 
     for entry in sorted_log:
         try:
@@ -943,29 +1119,35 @@ def _export_global_timestamps_csv(path):
         if last_ts_dt is not None:
             delta_ms   = (curr_ts_dt - last_ts_dt).total_seconds() * 1000
             delta_t_ms = round(delta_ms, 1)
-            if delta_t_ms < 3000:
-                observation = "potencial_colisao"
-                potenciais_3s += 1
-            elif delta_t_ms < 60000:
-                observation = "normal"
-            else:
-                observation = "gap"
+            observation = "gap" if delta_t_ms >= 60000 else "normal"
 
         last_ts_dt = curr_ts_dt
         rows.append({
-            'entry':       entry,
-            'delta_t_ms':  delta_t_ms,
-            'observation': observation,
+            'entry':              entry,
+            'delta_t_ms':         delta_t_ms,
+            'observation':        observation,
             'potential_collision': False,
         })
 
-    # --- passo 2: marcar colisões físicas (delta_rx < ToA_A) nos dois frames ---
+    # --- passo 2: marcar overlap_toa (delta < ToA_A, mesmo canal ou desconhecido) ---
+    overlap_count = 0
     for i in range(1, len(rows)):
-        toa_a  = rows[i-1]['entry'].get('toa_teorico_ms') or 616
-        delta  = rows[i]['delta_t_ms']
-        if delta is not None and delta < toa_a:
-            rows[i-1]['potential_collision'] = True
-            rows[i]['potential_collision']   = True
+        toa_a = rows[i-1]['entry'].get('toa_teorico_ms') or 616
+        delta = rows[i]['delta_t_ms']
+        if delta is None or delta >= toa_a:
+            continue
+
+        freq_a = rows[i-1]['entry'].get('frequency_mhz')
+        freq_b = rows[i]['entry'].get('frequency_mhz')
+
+        # Canais diferentes confirmados → sem colisão RF (EU868 ortogonal)
+        if freq_a and freq_b and freq_a != freq_b:
+            continue
+
+        rows[i-1]['potential_collision'] = True
+        rows[i]['potential_collision']   = True
+        rows[i]['observation']           = 'overlap_toa'
+        overlap_count += 1
 
     pc_count = sum(1 for r in rows if r['potential_collision'])
 
@@ -974,24 +1156,21 @@ def _export_global_timestamps_csv(path):
         writer = csv.writer(f)
         writer.writerow([
             'timestamp', 'node_id', 'fcnt', 'sf', 'toa_teorico_ms',
-            'rssi', 'snr', 'delta_t_ms', 'observation',
-            'delta_rx_ms', 'potential_collision',
+            'rssi', 'snr', 'frequency_mhz', 'delta_t_ms', 'observation', 'potential_collision',
         ])
         for r in rows:
             e = r['entry']
             writer.writerow([
                 e['timestamp'], e['node_id'], e['fcnt'],
                 e['sf'], e['toa_teorico_ms'],
-                e['rssi'], e['snr'],
+                e['rssi'], e['snr'], e.get('frequency_mhz'),
                 r['delta_t_ms'] if r['delta_t_ms'] is not None else '',
                 r['observation'],
-                r['delta_t_ms'] if r['delta_t_ms'] is not None else '',
                 r['potential_collision'],
             ])
 
     print(f"[EXPORT] Global Timestamps: {path} ({len(sorted_log)} frames)")
-    print(f"  - delta_t < 3s (potenciais colisoes):    {potenciais_3s}")
-    print(f"  - delta_rx < ToA (colisoes fisicas):      {pc_count}")
+    print(f"  - overlap_toa (delta < ToA, mesmo/desconhecido canal): {overlap_count} pares, {pc_count} frames")
 
 
 def input_listener():
@@ -1020,14 +1199,14 @@ def shutdown_handler(sig, frame):
 
 
 if __name__ == '__main__':
+    periods_str = "  |  ".join(f"No{nid}: {p}s" for nid, p in sorted(PERIODOS_NOMINAIS.items()))
     print("="*70)
-    print("  Pure ALOHA Server v3.2 - Metricas para comparacao CW-ALOHA")
-    print("  [NEW] S_observado, S_pure_aloha_teoria no summary")
-    print("  [NEW] G_window + S_window (sliding 20 frames) no raw CSV")
-    print("  [NEW] collision_free por frame no raw CSV")
-    print("  [NEW] dl_pdr_% por no no nodes.csv")
-    print("  [NEW] interval_std_s (era jitter_std_ms) em segundos no metrics.csv")
-    print("  [NEW] collision_rate_fcnt_% / collision_rate_temporal_% no summary")
+    print("  Pure ALOHA Server v3.2")
+    print(f"  Nos:      {periods_str}")
+    print(f"  SF7 BW125 | ToA={compute_toa_ms(7, 125000, 50):.1f}ms | Payload=50B")
+    print(f"  Export:   teste_pure_aloha/")
+    print(f"  Colisoes: fCnt gap + overlap temporal (filtro canal EU868)")
+    print(f"  Metricas: G  S  PDR  pdr_canal  utilizacao_canal  drift_ppm")
     print("="*70)
     print("  Commands: S=save Q=quit")
     print("="*70 + "\n")

@@ -40,7 +40,7 @@ void setup() {
   Serial.print(F("[INIT] Node ID: "));
   Serial.println(NODE_ID);
   Serial.print(F("[INIT] TX Period (fixo): "));
-  Serial.print(TX_PERIOD_S);
+  Serial.print(TX_PERIOD_MS / 1000.0, 1);
   Serial.println(F("s"));
   
   Serial.print(F("[INIT] DevEUI: "));
@@ -62,34 +62,21 @@ void setup() {
   }
   Serial.println(F("OK"));
   
-  Serial.print(F("[JOIN] OTAA... "));
-  
   node.clearSession();
   node.beginOTAA(appEUI, devEUI, nwkKey, appKey);
 
-  int join_attempts = 0;
-  state = -1;
-
-  while (join_attempts < 10) {
-    state = node.activateOTAA();
-
-    if (state == RADIOLIB_LORAWAN_NEW_SESSION) {
+  Serial.println(F("[JOIN] OTAA..."));
+  while (true) {
+    int s = node.activateOTAA();
+    if (s == RADIOLIB_LORAWAN_NEW_SESSION) {
+      Serial.println(F("[JOIN] OK!"));
       node.setADR(false);
-      node.setDatarate(5);  // DR5 = SF7 BW125
-      Serial.println(F("OK"));
+      int dr = node.setDatarate(5);  // DR5 = SF7 BW125 — ADR desactivado para SF fixo
+      Serial.printf("[DR]   setDatarate(5) = %d\n", dr);
       break;
     }
-    
-    Serial.print(F("Retry "));
-    Serial.println(join_attempts);
-    yield();
-    delay(5000);
-    join_attempts++;
-  }
-  
-  if (state != RADIOLIB_LORAWAN_NEW_SESSION) {
-    Serial.println(F("FAILED - halt"));
-    while(true) delay(1000);
+    Serial.printf("[JOIN] FAILED (%d) — retry 5s\n", s);
+    for (int i = 0; i < 5; i++) { delay(1000); yield(); }
   }
 
   #ifdef DEBUG_MODE
@@ -200,7 +187,8 @@ void loop() {
 
         if (test >= RADIOLIB_ERR_NONE || test == RADIOLIB_ERR_RX_TIMEOUT) {
           node.setADR(false);
-          node.setDatarate(5);
+          int dr = node.setDatarate(5);  // DR5 = SF7 BW125 — ADR desactivado
+          Serial.printf("[DR]   setDatarate(5) = %d\n", dr);
           Serial.println(F("[REJOIN] OK\n"));
           retry_count = 0;
           last_tx_ms = 0;
@@ -221,11 +209,11 @@ void loop() {
         delay(60000);
       }
       
-      delay(TX_PERIOD_S * 1000UL);
+      delay(TX_PERIOD_MS);
       return;
     }
 
-    delay(TX_PERIOD_S * 1000UL);
+    delay(TX_PERIOD_MS);
     return;
   }
   
@@ -262,16 +250,16 @@ void loop() {
   
   #ifdef DEBUG_MODE
     Serial.print(F("[WAIT] "));
-    Serial.print(TX_PERIOD_S);
+    Serial.print(TX_PERIOD_MS / 1000.0, 1);
     Serial.println(F("s (fixo)\n"));
-    delay(TX_PERIOD_S * 1000UL);
+    delay(TX_PERIOD_MS);
   #else
     Serial.print(F("[SLEEP] "));
-    Serial.print(TX_PERIOD_S);
+    Serial.print(TX_PERIOD_MS / 1000.0, 1);
     Serial.println(F("s (fixo)\n"));
     Serial.flush();
 
-    esp_sleep_enable_timer_wakeup((uint64_t)TX_PERIOD_S * 1000000ULL);
+    esp_sleep_enable_timer_wakeup((uint64_t)TX_PERIOD_MS * 1000ULL);
     esp_light_sleep_start();
 
     Serial.begin(115200);

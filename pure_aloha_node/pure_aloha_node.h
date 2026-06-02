@@ -12,17 +12,18 @@ LoRaWANNode node(&radio, &EU868);
 
 #define PAYLOAD_SIZE    50
 
-// Período fixo de transmissão (s) — igual em todos os nós
+// Período fixo em ms — evita truncagem de floats em delay()
+// (14.5 * 1000UL truncaria para 14000 em C++)
 #if NODE_ID == 1
-  #define TX_PERIOD_S 28
+  #define TX_PERIOD_MS 14000UL
 #elif NODE_ID == 2
-  #define TX_PERIOD_S 30
+  #define TX_PERIOD_MS 14500UL
 #elif NODE_ID == 3
-  #define TX_PERIOD_S 32
+  #define TX_PERIOD_MS 15000UL
 #elif NODE_ID == 4
-  #define TX_PERIOD_S 34
+  #define TX_PERIOD_MS 15500UL
 #else
-  #define TX_PERIOD_S 30
+  #define TX_PERIOD_MS 15000UL
 #endif
 
 #endif
