@@ -1,0 +1,5 @@
+node_id,dev_eui,toa_teo_acumulado_s,duracao_sessao_s,utilizacao_canal_%,duty_cycle_rf_medio_%,limite_legal_%,compliance
+1,9e70e30d570f93f5,120.4,17924.7,0.67,0.7,1.0,PASS
+2,788410651972aca8,113.6,17924.7,0.63,0.67,1.0,PASS
+3,dc63358a5a95d62f,113.9,17924.7,0.64,0.65,1.0,PASS
+4,1573451f0dff21d1,108.1,17924.7,0.6,0.63,1.0,PASS

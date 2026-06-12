@@ -1,0 +1,424 @@
+================================================================================
+  PURE ALOHA — COMPARAÇÃO ENTRE NÍVEIS DE CARGA
+  Sistema: 4 nós ESP32+SX1262 | ChirpStack v4 | SF7 BW125 | ToA=97ms | EU868
+================================================================================
+
+Os três níveis de carga explorados diferem apenas no TX_PERIOD_MS de cada nó.
+Todos os outros parâmetros RF são idênticos: SF7, BW125, CR4/5, ToA=97ms,
+payload=50 bytes, 4 nós, mesmo gateway, mesmo ambiente físico.
+
+  Nível T1 — Baixa carga    — Períodos 14 a 15.5s — Sessões: 0241, 0246
+  Nível T2 — Média carga    — Períodos  4.8 a 6s  — Sessões: 0719, 0724
+  Nível T3 — Elevada carga  — Períodos 2.8 a 3.55s — Sessão: 1214
+
+
+================================================================================
+  TABELA RESUMO — O QUE MUDA COM O NÍVEL DE CARGA
+================================================================================
+
+Métrica                          │  T1 (baixo)  │  T2 (médio)  │  T3 (alto)
+─────────────────────────────────┼──────────────┼──────────────┼──────────────
+Período inter-TX por nó (s)      │  14 – 15.5   │  4.8 – 6     │  2.8 – 3.55
+G oferecido (calculado)          │  0.024        │  0.072        │  0.121
+S teórico  [G·e^(-2G)]           │  0.023        │  0.062        │  0.095
+S observado                      │  0.022        │  0.053        │  0.051
+S_obs / S_teo  (eficiência)      │  94–95%       │  84–86%       │  54%
+PDR uplink (frames recebidos)    │  94–95%       │  85–87%       │  69%
+Colisões FCnt gap (%)            │  5 – 6%       │  13–15%       │  31%
+Colisões temporais (%)           │  ≈ 0           │  ≈ 0           │  0.12%
+Duty cycle por nó                │  0.63–0.69%   │  1.7–2.0%    │  2.9–3.5%
+Cumpre limite EU868 de 1%?       │  SIM (todos)  │  NÃO (todos)  │  NÃO (todos)
+sr_elevado (sendRx > 2 000ms)    │  5 – 9%       │  17–26%       │  44–46%
+wait_ms clipado a 200ms?         │  Raramente    │  Ocasional    │  Frequente
+Rejoins por sessão               │  0 – 1        │  1 – 2        │  4+
+Duração prática de sessão        │  200 – 360min │  94–110min    │  ≈ 96min
+Modelo Poisson adequado?         │  Razoável     │  Moderado     │  Fraco
+Interferência ChirpStack         │  Mínima       │  Moderada     │  Severa
+
+
+================================================================================
+  DIMENSÃO 1 — TRÁFEGO OFERECIDO G E POSIÇÃO NA CURVA S = G·e^(-2G)
+================================================================================
+
+O único parâmetro que o experimentador controla directamente é TX_PERIOD_MS.
+Tudo o resto — G, S_teo, S_obs, PDR, colisões — decorre desse período.
+
+  T1: G = 97/14000 + 97/14500 + 97/15000 + 97/15500
+        = 0.00693 + 0.00669 + 0.00647 + 0.00626 = 0.0264
+      (Sessões 0241/0246 corridas com node 1 a 14s; G≈0.024)
+
+  T2: G ≈ 97/4800 + 97/5500 + 97/5700 + 97/5900
+        ≈ 0.0202 + 0.0176 + 0.0170 + 0.0164 = 0.0712
+      (Factor de escala ~2.7× face a T1)
+
+  T3: G ≈ 97/2800 + 97/3240 + 97/3350 + 97/3470
+        ≈ 0.0347 + 0.0299 + 0.0290 + 0.0280 = 0.1216
+      (Factor de escala ~4.6× face a T1)
+
+Posição na curva S = G·e^(-2G) — máximo em G=0.5 com S_max=0.184:
+
+      G=0.024: lado esquerdo muito distante do pico → sistema sub-utilizado,
+               poucas colisões, comportamento próximo do canal sem tráfego.
+
+      G=0.072: ainda no lado esquerdo mas a subir → throughput real cresce,
+               colisões começam a ser visíveis, afastamento do Poisson cresce.
+
+      G=0.121: ainda sub-G_max=0.5 mas já com carga significativa → seria onde
+               o throughput deveria continuar a crescer segundo a teoria, mas
+               os efeitos práticos (duty cycle, ChirpStack) degradam S_obs.
+
+Nota crítica: S_obs em T3 (0.051) é INFERIOR a S_obs em T2 (0.053) apesar de
+G ser maior. Segundo a teoria S deveria ser maior. A causa é operacional:
+o duty cycle ilegal força o ChirpStack a interferir, os nós ficam presos em
+sendReceive > 3000ms e o timing do protocolo colapsa.
+
+
+================================================================================
+  DIMENSÃO 2 — COLISÕES: FCnt GAP E TEMPORAIS
+================================================================================
+
+O método de detecção por FCnt gap conta frames perdidos comparando o frame
+counter de cada nó com o esperado. O método temporal detecta sobreposição
+directa de frames no mesmo canal com base nos timestamps do gateway.
+
+  T1 — colisões FCnt gap: 5–6% dos frames transmitidos colidem e perdem-se.
+       Com G=0.024, P_colisão_teoria = 1 - e^(-2×0.024) = 4.66%.
+       O observado (5–6%) está ~1 ponto percentual acima da teoria — o excesso
+       é causado pelo tráfego determinístico de período fixo que cria pequenos
+       clusters de colisão não previstos pelo modelo de Poisson.
+
+  T2 — colisões FCnt gap: 13–15%. Teoria: 1 - e^(-2×0.072) = 13.44%.
+       O observado (13–15%) está ligeiramente acima — mesma causa de beat
+       frequency, agravada porque os nós transmitem mais vezes por minuto
+       e os alinhamentos temporais são mais frequentes.
+
+  T3 — colisões FCnt gap: 31.2%. Teoria: 1 - e^(-2×0.121) = 21.56%.
+       O observado é 9.6 pontos percentuais ACIMA da teoria. A diferença
+       explica-se pela interferência activa do ChirpStack (downlinks que
+       atrasamos nós e criam clustering), pelo colapso do timing quando
+       wait_ms é clipado a 200ms, e pela falha severa do pressuposto Poisson.
+
+  Colisões temporais em todos os níveis: ≈ 0 (T1 e T2) ou 0.12% (T3).
+  O efeito de captura LoRa resolve quase todas as colisões RF: o sinal mais
+  forte sobrevive, o mais fraco desaparece sem deixar timestamp no servidor.
+  Em T3 aparecem 6 colisões temporais (0.12%) porque com frames muito próximos
+  os sinais por vezes têm RSSI suficientemente próximo para que o capture
+  effect falhe e AMBOS se percam — ambos chegam ao gateway com corrupção.
+
+
+================================================================================
+  DIMENSÃO 3 — DUTY CYCLE E CUMPRIMENTO LEGAL EU868
+================================================================================
+
+A regulamentação ETSI EN 300 220 limita cada dispositivo a 1% de duty cycle
+por sub-banda na EU868. Duty cycle = ToA / período = 97ms / T_ms * 100%.
+
+  T1 — Períodos 14 000 – 15 500ms:
+       Nó 1: 97/14000 × 100 = 0.693% → PASS ✓
+       Nó 2: 97/14500 × 100 = 0.669% → PASS ✓
+       Nó 3: 97/15000 × 100 = 0.647% → PASS ✓
+       Nó 4: 97/15500 × 100 = 0.626% → PASS ✓
+       → Todos os nós cumprem o limite legal. O ChirpStack não envia MAC
+         commands de regulação. Interferência de downlinks mínima (sr_elevado≈5%).
+
+  T2 — Períodos ~4 800 – 6 000ms:
+       Nó 1: 97/4800 × 100 ≈ 2.02% → FAIL ✗ (2× o limite)
+       Nó 2: 97/5500 × 100 ≈ 1.76% → FAIL ✗
+       Nó 3: 97/5700 × 100 ≈ 1.70% → FAIL ✗
+       Nó 4: 97/5900 × 100 ≈ 1.64% → FAIL ✗
+       → O ChirpStack detecta violações e começa a enviar DutyCycleReq e
+         LinkADRReq em downlinks. sr_elevado sobe para 17–26%. Os nós ficam
+         presos em sendReceive > 2000ms nas transacções com downlink, o que
+         distorce o timing e reduz ligeiramente o throughput efectivo.
+
+  T3 — Períodos ~2 800 – 3 550ms:
+       Nó 1: 97/2800 × 100 ≈ 3.47% → FAIL ✗ (3.5× o limite)
+       Nó 2: 97/3240 × 100 ≈ 2.99% → FAIL ✗
+       Nó 3: 97/3350 × 100 ≈ 2.90% → FAIL ✗
+       Nó 4: 97/3470 × 100 ≈ 2.80% → FAIL ✗
+       → Violação severa. ChirpStack em modo activo de controlo: 44–46% das
+         transacções têm downlink (sr_elevado). Estes downlinks prolongam o
+         sendReceive para 2000–4000ms. Como TX_PERIOD_MS ≈ 2800–3550ms,
+         frequentemente: wait_ms = 2800 - 3500 = −700ms → clipado a 200ms.
+         O ciclo efectivo passa a ser sendReceive(3000ms) + 200ms = 3200ms
+         em vez dos 2800ms pretendidos — o nó fica ainda mais rápido do que
+         o planeado, agravando a violação de duty cycle num ciclo de realimentação.
+
+
+================================================================================
+  DIMENSÃO 4 — COMPORTAMENTO DO wait_ms E TIMING DO PROTOCOLO
+================================================================================
+
+O firmware calcula: wait_ms = TX_PERIOD_MS - sendreceive_ms
+e clipa: if (wait_ms < 200) wait_ms = 200.
+
+  Caso típico sem downlink:
+      sendreceive_ms ≈ 1100ms (97ms ToA + 1000ms espera RX1)
+      wait_ms = TX_PERIOD_MS - 1100
+
+      T1 (14000ms): wait_ms = 14000 - 1100 = 12900ms → ciclo ≈ 14000ms ✓
+      T2  (4800ms): wait_ms =  4800 - 1100 =  3700ms → ciclo ≈  4800ms ✓
+      T3  (2800ms): wait_ms =  2800 - 1100 =  1700ms → ciclo ≈  2800ms ✓
+
+  Caso com downlink (sendreceive_ms ≈ 3000ms, frequente em T2 e T3):
+
+      T1 (14000ms): wait_ms = 14000 - 3000 = 11000ms → ainda correcto ✓
+      T2  (4800ms): wait_ms =  4800 - 3000 =  1800ms → correcto mas compressa ✓
+      T3  (2800ms): wait_ms =  2800 - 3000 =  −200ms → CLIP para 200ms ✗
+                    ciclo efectivo = 3000 + 200 = 3200ms > 2800ms pretendido
+
+  Quando sendreceive_ms > 4000ms (downlink + RX2 completo, raro mas ocorre em T3):
+
+      T3  (2800ms): wait_ms =  2800 - 4200 = −1400ms → CLIP para 200ms ✗
+                    ciclo efectivo = 4200 + 200 = 4400ms >> 2800ms
+
+  Consequência para o protocolo:
+      Em T1: o timing é quase perfeito — o nó transmite exactamente ao ritmo
+             planeado independentemente de receber ou não downlinks.
+      Em T2: o timing degrada ligeiramente quando há downlinks mas mantém-se
+             próximo do planeado (ciclo 4800→5200ms, +8%).
+      Em T3: o timing colapsa quando há downlinks — o ciclo varia entre 2800ms
+             (sem downlink) e 4400ms (com downlink longo), criando um processo
+             de chegada com alta variância e sem o período fixo que caracteriza
+             o design do experimento. O modelo teórico perde completamente o
+             significado nestes ciclos.
+
+
+================================================================================
+  DIMENSÃO 5 — INTERFERÊNCIA DO CHIRPSTACK (sr_elevado e MAC COMMANDS)
+================================================================================
+
+O ChirpStack envia MAC commands automaticamente quando detecta comportamento
+fora do esperado. Chegam como downlinks nas janelas RX1 ou RX2 e prolongam o
+sendReceive acima dos 2000ms (definição de sr_elevado no servidor).
+
+  T1 — sr_elevado ≈ 5–9%:
+       Causa: ADR requests esporádicos (LinkADRReq) mesmo com ADR desligado
+       no nó — o ChirpStack envia de vez em quando sem impacto real porque
+       o nó ignora o ajuste de DR.
+       Efeito no protocolo: mínimo. Os 5–9% de transacções com downlink criam
+       ciclos ligeiramente mais longos mas dentro da margem do wait_ms de T1.
+
+  T2 — sr_elevado ≈ 17–26%:
+       Causa: DutyCycleReq (ChirpStack detecta ~2% de duty cycle vs limite 1%),
+       LinkADRReq periódicos.
+       Efeito: 17–26% das transacções duram >2000ms. Como TX_PERIOD_MS≈4800ms,
+       wait_ms ainda tem margem (4800-3000=1800ms) mas o timing fica ruidoso.
+       O PDR cai para 85–87% — as colisões aumentam porque o timing variável
+       cria clustering não previsto pelo modelo.
+
+  T3 — sr_elevado ≈ 44–46%:
+       Causa: Violação severa de duty cycle (2.9–3.5%), o ChirpStack entra em
+       modo activo de controlo regulatório enviando DutyCycleReq em quase todos
+       os downlinks disponíveis.
+       Efeito: Quase metade das transacções têm downlink → wait_ms clipado →
+       ciclo irregular → clustering de colisões → 31.2% de PDR loss.
+       Em T3 o ChirpStack DEFORMA o protocolo Pure ALOHA activamente: está
+       a regular o tráfego externamente, algo que o modelo teórico não considera.
+
+
+================================================================================
+  DIMENSÃO 6 — EFEITO DE CAPTURA (CAPTURE EFFECT)
+================================================================================
+
+O efeito de captura LoRa permite ao receptor demodular o sinal mais forte
+quando dois frames colidem, desde que a diferença de RSSI seja > ~6dB.
+
+  T1: Efeito de captura muito eficaz.
+      Link margin ≈ 67–68dB. Com 4 nós no mesmo edifício, diferenças de RSSI
+      entre nós são de 5–20dB — suficiente para o capture effect actuar.
+      Resultado: quase todas as colisões RF são "resolvidas" → frame mais forte
+      sobrevive, mais fraco desaparece (FCnt gap). Colisões temporais ≈ 0.
+
+  T2: Efeito de captura igualmente eficaz nas condições físicas.
+      Colisões temporais ainda ≈ 0. Os gaps de FCnt aumentam (13–15%) mas
+      continuam a ser quase todos "capturados" pelo gateway.
+
+  T3: Efeito de captura começa a falhar ocasionalmente (6 colisões temporais,
+      0.12%). Com mais frames por segundo, a probabilidade de dois frames com
+      RSSI próximo colidem aumenta. Quando |RSSI_A - RSSI_B| < 6dB, ambos
+      se perdem — nenhum sobrevive, nenhum FCnt gap é detectado no servidor
+      porque AMBOS os frames desaparecem. Estas são as colisões temporais
+      observadas — a ponta visível de colisões duplas que outros detectores
+      não captam.
+
+  Implicação para o PDR:
+      A métrica PDR (via FCnt gap) conta apenas frames onde UM dos dois
+      sobreviveu (capture effect) — o perdedor regista como gap. Quando ambos
+      se perdem (colisão dupla sem capture), AMBOS registam FCnt gap no seu
+      respectivo stream. Em T3 este fenómeno começa a ser significativo.
+
+
+================================================================================
+  DIMENSÃO 7 — ADEQUAÇÃO DO MODELO POISSON E DESVIO TEORIA/REALIDADE
+================================================================================
+
+A teoria S = G·e^(-2G) pressupõe chegadas de Poisson (completamente aleatórias).
+O sistema usa períodos fixos e determinísticos — desvio do pressuposto.
+
+  T1 — Desvio teoria/realidade: 5–6%
+       Com períodos longos (14–15.5s), os batimentos entre nós são lentos.
+       O alinhamento entre nó 1 (14s) e nó 2 (14.5s) tem período de
+       14 × 14.5 / (14.5-14) = 406 segundos — clusters de colisão a cada 6.7min.
+       Em sessões de 200–360min, estes clusters são detectáveis mas representam
+       uma fracção pequena dos eventos. O modelo Poisson é razoável.
+
+  T2 — Desvio teoria/realidade: 14–16%
+       Com períodos curtos (4.8–6s), os batimentos entre nós são mais rápidos.
+       O alinhamento entre nó 1 (4.8s) e nó 2 (5.5s) tem período de
+       4.8 × 5.5 / (5.5-4.8) = 37.7 segundos — cluster a cada 38s.
+       Em 94–110min de sessão, ocorrem 145–175 episódios de clustering.
+       O modelo Poisson começa a subestimar a taxa de colisão real de forma
+       significativa mas ainda captura a tendência correcta.
+
+  T3 — Desvio teoria/realidade: 46%
+       Períodos muito curtos (2.8–3.55s). O clustering é tão frequente que
+       o modelo Poisson é fundamentalmente inadequado. A isto adiciona-se a
+       interferência activa do ChirpStack que cria padrões temporais nos
+       downlinks que não são modelados em S = G·e^(-2G). O S_obs (0.051)
+       acabou por ser praticamente idêntico ao de T2 (0.053) apesar de G ser
+       1.7× maior — a eficiência do canal saturou por razões operacionais.
+
+
+================================================================================
+  DIMENSÃO 8 — QUALIDADE DO SINAL (RSSI, SNR, LINK MARGIN)
+================================================================================
+
+Estes parâmetros NÃO variam significativamente entre níveis de carga porque
+a configuração física (nós, gateway, ambiente) é a mesma em todas as sessões.
+
+  Valores médios consistentes em todos os níveis:
+      RSSI médio:         ≈ −52 dBm     (nós muito próximos do gateway)
+      SNR médio:          ≈ +12 a +13 dB
+      Link margin médio:  ≈ 66–68 dB    (com sensitivity SF7 = −120 dBm)
+
+  O link margin elevado (67dB) explica o capture effect eficaz: com sinais
+  tão fortes, a diferença relativa entre dois nós que colidem é suficiente
+  para discriminar o sinal mais forte.
+
+  Nota: o link margin seria ~71dB com a sensibilidade real do SX1262 (−124dBm)
+  em vez do valor conservador usado no servidor (−120dBm). Para fins comparativos
+  entre sessões, a escolha consistente não afecta as conclusões.
+
+
+================================================================================
+  DIMENSÃO 9 — DRIFT DE RELÓGIO E JITTER
+================================================================================
+
+O drift de relógio é uma propriedade do oscilador físico de cada nó — deve
+ser idêntico entre sessões com o mesmo nó. O jitter (residual_std) VARIA.
+
+  T1 — residual_std ≈ 80–100ms:
+       Sleep longo (12–14s) → jitter do timer de light sleep é grande em
+       termos absolutos. Cada ciclo de sleep introduz variabilidade de
+       ±50–100ms no millis() que se acumula de forma não-linear. O modelo
+       de drift linear captura a tendência mas o ruído é elevado.
+
+  T2 — residual_std ≈ 40–60ms:
+       Sleep de 3–4s → jitter do timer menor. O drift linear é mais limpo
+       e o residual menor. A regressão é mais precisa.
+
+  T3 — residual_std ≈ 30–40ms:
+       Sleep de 1–2s → jitter mínimo. Porém, os múltiplos rejoins (4+ por
+       sessão em T3) causam quebras no offset_raw que a regressão linear
+       tenta modelar como slope. A sessão 0719 (T2) mostrou drift anómalo
+       de −44 a −50ppm com residual_std de 330–355ms precisamente por
+       misturar amostras de antes e depois de rejoins numa única regressão.
+
+  drift_ppm por nó é consistente entre T1 e T2 (mesmo nó físico = mesmo
+  cristal = mesmo drift). Em T3, os rejoins frequentes tornam o drift_ppm
+  menos fiável como caracterização do hardware.
+
+
+================================================================================
+  DIMENSÃO 10 — REJOINS E ESTABILIDADE DA SESSÃO
+================================================================================
+
+  T1 — Rejoins por sessão: 0–1.
+       Os nós operam dentro dos limites legais de duty cycle, o ChirpStack
+       não os bloqueia, o sinal é forte e estável. As sessões de 200–360min
+       decorrem sem interrupções. Os raros rejoins observados foram causados
+       por interferência externa esporádica ou reinício do servidor.
+
+  T2 — Rejoins por sessão: 1–2.
+       A violação de duty cycle faz o ChirpStack enviar MAC commands mais
+       agressivos. Ocasionalmente o ChirpStack bloqueia temporariamente
+       um dispositivo quando a violação é muito acentuada — o nó não consegue
+       fazer join durante algum tempo, ficando offline. O firmware detecça 3
+       falhas consecutivas e inicia a sequência de rejoin (até 5 tentativas
+       com 5s de delay entre cada).
+
+  T3 — Rejoins por sessão: 4+ (sessão 1214: 4 rejoins em 96min).
+       Com ~1.3 frames/segundo total (4 nós a ~3s de período), o gateway fica
+       sobrecarregado e começa a rejeitar frames que parecem duplicados ou
+       com fCnt inválido. Os nós sofrem falhas RF frequentes, atingem 3 falhas
+       consecutivas e rejuntam. O rejoin em si demora 25–40 segundos (5 tentativas
+       × 5s + TX de teste), durante o qual o nó não contribui para o G mas o
+       tx_attempt_count parou (o rejoin não é um loop() normal). Os rejoins
+       frequentes criam lacunas no dataset que distorcem a análise de drift e
+       de período médio.
+
+
+================================================================================
+  DIMENSÃO 11 — FRAMES POR MINUTO E THROUGHPUT EFECTIVO
+================================================================================
+
+  Taxa de frames recebidos por minuto (Rx rate):
+
+      T1: G=0.024, PDR≈95%, S≈0.022
+          Frames totais TX: 4 nós × 60min/14.5s_avg ≈ 1007 frames por hora
+          Frames RX: ≈ 957 frames por hora ≈ 16 frames/min total (4 nós)
+
+      T2: G=0.072, PDR≈86%, S≈0.053
+          Frames totais TX: 4 nós × 60min/5.25s_avg ≈ 2743 frames por hora
+          Frames RX: ≈ 2359 frames por hora ≈ 39 frames/min total (4 nós)
+
+      T3: G=0.121, PDR≈69%, S≈0.051
+          Frames totais TX: 4 nós × 60min/3.1s_avg ≈ 4645 frames por hora
+          Frames RX: ≈ 3204 frames por hora ≈ 53 frames/min total (4 nós)
+
+  Comparação crítica T2 vs T3:
+      Apesar de em T3 haver 69% mais tentativas de TX do que em T2, os frames
+      RX aumentam apenas 36% (53 vs 39 por minuto). O excesso de tentativas
+      traduz-se quase todo em colisões e em sobrecarga do sistema. A eficiência
+      marginal de cada transmissão extra em T3 é muito baixa — cada nó adicional
+      a transmitir mais rápido contribui mais para colisões do que para throughput.
+
+  Throughput normalizado S × canal_utilizado:
+      T1: canal ocupa 2.6% do tempo, entrega 2.2% de throughput útil (efic=85%)
+      T2: canal ocupa 7.2% do tempo, entrega 5.3% de throughput útil (efic=74%)
+      T3: canal ocupa 12.1% do tempo, entrega 5.1% de throughput útil (efic=42%)
+
+
+================================================================================
+  SÍNTESE — QUANDO USAR CADA NÍVEL
+================================================================================
+
+  T1 (G≈0.024) — RECOMENDADO para operação real:
+  ✓ Cumpre o limite legal de duty cycle EU868 (0.63–0.69% por nó)
+  ✓ PDR elevado e estável (94–95%)
+  ✓ Sessões longas sem rejoins (200–360min sem problemas)
+  ✓ Comportamento próximo da teoria (desvio apenas 5–6%)
+  ✓ Resultados reprodutíveis entre sessões (0241 vs 0246 quase idênticos)
+  ✗ Throughput baixo — canal sub-utilizado
+
+  T2 (G≈0.072) — ÚTIL para demonstrar degradação:
+  ~ PDR reduzido (85–87%) — perda de 15% dos frames
+  ~ Viola duty cycle EU868 (~1.7–2.0% por nó vs limite 1%)
+  ~ Interferência moderada do ChirpStack (17–26% de sr_elevado)
+  ~ Desvio da teoria cresce para 14–16% (Poisson menos adequado)
+  ✓ Regime de carga onde S ainda cresce com G (≠ T3)
+  ✓ Sessões razoavelmente estáveis (1–2 rejoins em 94–110min)
+
+  T3 (G≈0.121) — APENAS para estudo de saturação e colapso:
+  ✗ PDR muito baixo (69%) — 31% dos frames perdidos por colisão
+  ✗ Viola duty cycle de forma severa (2.9–3.5% por nó — 3× o limite)
+  ✗ ChirpStack interfere activamente em 44–46% das transacções
+  ✗ S_obs colapsa para valor idêntico ao de T2 apesar de G 1.7× maior
+  ✗ Timing do protocolo deformado por wait_ms clipado a 200ms
+  ✗ Sessão instável: 4+ rejoins em 96min
+  ✓ Demonstra de forma clara o regime de colapso do Pure ALOHA
+
+================================================================================
+  FIM DO DOCUMENTO
+================================================================================

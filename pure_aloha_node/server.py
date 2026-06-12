@@ -925,7 +925,7 @@ def _export_nodes_csv(path):
             'pdr_%', 'collision_rate_%', 'dl_pdr_%',
             'rssi_mean_dBm', 'snr_mean_dB', 'link_margin_mean_dB',
         ])
-
+    
         for dev_eui, stats in sorted(NODE_COUNTERS.items(), key=lambda x: x[1]['node_id']):
             node_id     = stats['node_id']
             tx_current  = stats['last_fcnt'] + 1

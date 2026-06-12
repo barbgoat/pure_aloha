@@ -1,6 +1,6 @@
 #include "pure_aloha_node.h"
 
-#define DEBUG_MODE
+//#define DEBUG_MODE
 
 uint32_t tx_count = 0;
 uint32_t rx_expected = 0;
@@ -248,20 +248,32 @@ void loop() {
     Serial.println(F("ms)"));
   }
   
+  // T_efetivo = TX_PERIOD_MS; subtrai sendReceive para manter período estável
+  int32_t wait_ms = (int32_t)TX_PERIOD_MS - (int32_t)sendreceive_ms;
+  if (wait_ms < 200) wait_ms = 200;
+
   #ifdef DEBUG_MODE
     Serial.print(F("[WAIT] "));
-    Serial.print(TX_PERIOD_MS / 1000.0, 1);
-    Serial.println(F("s (fixo)\n"));
-    delay(TX_PERIOD_MS);
+    Serial.print(wait_ms / 1000.0, 2);
+    Serial.println(F("s\n"));
+    delay((uint32_t)wait_ms);
   #else
     Serial.print(F("[SLEEP] "));
-    Serial.print(TX_PERIOD_MS / 1000.0, 1);
-    Serial.println(F("s (fixo)\n"));
+    Serial.print(wait_ms / 1000.0, 2);
+    Serial.println(F("s\n"));
     Serial.flush();
 
-    esp_sleep_enable_timer_wakeup((uint64_t)TX_PERIOD_MS * 1000ULL);
-    esp_light_sleep_start();
+    // v2 (corrigido): sem Serial.begin, guard 50ms, sem margem antecipação
+    // uint64_t sleep_us = (uint64_t)wait_ms * 1000ULL;
+    // if (sleep_us > 50000ULL) {
+    //   esp_sleep_enable_timer_wakeup(sleep_us);
+    //   esp_light_sleep_start();
+    //   delay(5);
+    // }
 
+    // v1 (original): referência para comparação de autonomia
+    esp_sleep_enable_timer_wakeup((uint64_t)wait_ms * 1000ULL);
+    esp_light_sleep_start();
     Serial.begin(115200);
     delay(100);
     Serial.println(F("[WAKE] Back"));
