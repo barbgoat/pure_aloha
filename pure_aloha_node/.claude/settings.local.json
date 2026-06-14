@@ -6,7 +6,9 @@
       "PowerShell($files = Get-ChildItem -Path \"c:\\\\Users\\\\Eduardo Barbosa\\\\Documents\\\\Arduino\\\\pure_aloha\\\\pure_aloha_node\\\\Dados\" -Recurse -Force; foreach\\($f in $files\\) { Write-Host \"$\\($f.FullName\\) - Size: $\\($f.Length\\) bytes\" })",
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Eduardo Barbosa\\\\Documents\\\\Arduino\\\\pure_aloha\\\\pure_aloha_node\" -Recurse -Force)",
       "Bash(Select-Object FullName)",
-      "Bash(Sort-Object FullName)"
+      "Bash(Sort-Object FullName)",
+      "Bash(Get-ChildItem \"c:\\\\Users\\\\Eduardo Barbosa\\\\Documents\\\\Arduino\\\\pure_aloha\\\\pure_aloha_node\\\\teste_pure_aloha\" -Recurse -Filter \"*.csv\")",
+      "Bash(python3 -c ' *)"
     ]
   }
 }

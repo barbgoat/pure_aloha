@@ -1,5 +1,5 @@
-node_id,dev_eui,toa_teo_acumulado_s,duracao_sessao_s,utilizacao_canal_%,duty_cycle_rf_medio_%,limite_legal_%,compliance
-1,9e70e30d570f93f5,128.4,5768.5,2.23,3.48,1.0,FAIL
-2,788410651972aca8,122.9,5768.5,2.13,3.2,1.0,FAIL
-3,dc63358a5a95d62f,120.6,5768.5,2.09,2.96,1.0,FAIL
-4,1573451f0dff21d1,110.1,5768.5,1.91,2.75,1.0,FAIL
+node_id;dev_eui;toa_teo_acumulado_s;duracao_sessao_s;utilizacao_canal_%;duty_cycle_rf_medio_%;limite_legal_%;compliance
+1;9e70e30d570f93f5;128.4;5768.5;2.23;3.48;1.0;FAIL
+2;788410651972aca8;122.9;5768.5;2.13;3.2;1.0;FAIL
+3;dc63358a5a95d62f;120.6;5768.5;2.09;2.96;1.0;FAIL
+4;1573451f0dff21d1;110.1;5768.5;1.91;2.75;1.0;FAIL

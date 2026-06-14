@@ -1,33 +1,33 @@
-parameter,value
-session_start,2026-06-09 11:09:55
-session_end,2026-06-09 13:00:21
-duration_min,110.4
-
-n_nodes,4
-"nodes,""No 1, No 2, No 3, No 4"""
-n_rejoins,5
-
-toa_teorico_avg_ms,97.54
-G_calc_method,tx_attempt_count (directo)
-traffic_load_G_real,0.0724
-P_collision_theory_%,13.49
-utilizacao_canal_total_%,6.28
-
-S_observado,0.054
-S_pure_aloha_teoria,0.0627
-
-total_tx,4921
-total_rx,4267
-total_lost,653
-pdr_uplink_%,86.71
-
-collision_rate_fcnt_%,13.27
-collisions_fcnt_gap,653
-collision_rate_temporal_%,0.0
-collisions_temporal,0
-pdr_canal_%,100.0
-pdr_plus_collision_%,99.98
-
-rssi_mean_dBm,-53.93
-snr_mean_dB,13.02
-link_margin_mean_dB,66.07
+parameter;value
+session_start;09/06/2026 11:09
+session_end;09/06/2026 13:00
+duration_min;110.4
+;
+n_nodes;4
+nodes;No 1, No 2, No 3, No 4
+n_rejoins;5
+;
+toa_teorico_avg_ms;97.54
+G_calc_method;tx_attempt_count (directo)
+traffic_load_G_real;0.0724
+P_collision_theory_%;13.49
+utilizacao_canal_total_%;6.28
+;
+S_observado;0.054
+S_pure_aloha_teoria;0.0627
+;
+total_tx;4921
+total_rx;4267
+total_lost;653
+pdr_uplink_%;86.71
+;
+collision_rate_fcnt_%;13.27
+collisions_fcnt_gap;653
+collision_rate_temporal_%;0.0
+collisions_temporal;0
+pdr_canal_%;100.0
+pdr_plus_collision_%;99.98
+;
+rssi_mean_dBm;-53.93
+snr_mean_dB;13.02
+link_margin_mean_dB;66.07

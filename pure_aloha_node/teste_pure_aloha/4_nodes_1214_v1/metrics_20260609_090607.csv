@@ -1,5 +1,5 @@
-node_id,dev_eui,toa_teorico_ms,duty_cycle_rf_%,ocupacao_no_%,periodo_nominal_s,periodo_real_avg_s,interval_std_s,interval_gateway_avg_s,interval_delta_avg_ms,sr_teorico_ms,sr_avg_ms,sr_std_ms,sr_min_ms,sr_max_ms,sr_elevado_n,sr_elevado_%,link_margin_avg_db,link_margin_min_db,drift_ppm,residual_std_ms
-1,9e70e30d570f93f5,97.536,3.48,3.32,2.8,2.94,0.17,4.354,-1414.0,1097.5,2026.7,788.6,1283,4006,581,44.18,63.1,33,9.4,36.36
-2,788410651972aca8,97.536,3.2,3.17,3.05,3.08,0.067,4.553,-1473.0,1097.5,2056.8,789.3,1273,4023,582,46.23,64.7,55,7.84,31.1
-3,dc63358a5a95d62f,97.536,2.96,2.96,3.3,3.3,0.051,4.653,-1353.0,1097.5,2025.8,786.4,1322,4021,546,44.21,78.6,52,8.41,33.35
-4,1573451f0dff21d1,97.536,2.75,2.75,3.55,3.55,0.04,5.098,-1548.0,1097.5,2032.2,787.8,1291,4036,503,44.59,65.2,26,6.54,36.99
+node_id;dev_eui;toa_teorico_ms;duty_cycle_rf_%;ocupacao_no_%;periodo_nominal_s;periodo_real_avg_s;interval_std_s;interval_gateway_avg_s;interval_delta_avg_ms;sr_teorico_ms;sr_avg_ms;sr_std_ms;sr_min_ms;sr_max_ms;sr_elevado_n;sr_elevado_%;link_margin_avg_db;link_margin_min_db;drift_ppm;residual_std_ms
+1;9e70e30d570f93f5;97.536;3.48;3.32;2.8;2.94;0.17;4.354;-1414.0;1097.5;2026.7;788.6;1283;4006;581;44.18;63.1;33;9.4;36.36
+2;788410651972aca8;97.536;3.2;3.17;3.05;3.08;0.067;4.553;-1473.0;1097.5;2056.8;789.3;1273;4023;582;46.23;64.7;55;7.84;31.1
+3;dc63358a5a95d62f;97.536;2.96;2.96;3.3;3.3;0.051;4.653;-1353.0;1097.5;2025.8;786.4;1322;4021;546;44.21;78.6;52;8.41;33.35
+4;1573451f0dff21d1;97.536;2.75;2.75;3.55;3.55;0.04;5.098;-1548.0;1097.5;2032.2;787.8;1291;4036;503;44.59;65.2;26;6.54;36.99

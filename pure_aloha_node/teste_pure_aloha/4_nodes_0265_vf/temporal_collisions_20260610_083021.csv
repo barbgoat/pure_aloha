@@ -1,2 +1,2 @@
-timestamp,node_atual,fcnt_atual,node_anterior,fcnt_anterior,overlap_s,sf_atual,sf_anterior,freq_atual_mhz,freq_anterior_mhz,canal_confirmado
-2026-06-10T06:42:41.304338433+00:00,1,1072,3,1003,0.037,7,7,867.1,867.1,True
+timestamp;node_atual;fcnt_atual;node_anterior;fcnt_anterior;overlap_s;sf_atual;sf_anterior;freq_atual_mhz;freq_anterior_mhz;canal_confirmado
+2026-06-10T06:42:41.304338433+00:00;1;1072;3;1003;0.037;7;7;867.1;867.1;True
