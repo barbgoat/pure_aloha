@@ -8,7 +8,10 @@
       "Bash(Select-Object FullName)",
       "Bash(Sort-Object FullName)",
       "Bash(Get-ChildItem \"c:\\\\Users\\\\Eduardo Barbosa\\\\Documents\\\\Arduino\\\\pure_aloha\\\\pure_aloha_node\\\\teste_pure_aloha\" -Recurse -Filter \"*.csv\")",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Read(//c/Users/Eduardo Barbosa/Documents/Arduino/pure_aloha/**)",
+      "Bash(awk '-F;' 'NR>1 && $2+0>0 { *)",
+      "Bash(awk 'BEGIN { *)"
     ]
   }
 }

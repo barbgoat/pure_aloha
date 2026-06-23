@@ -1,5 +1,0 @@
-node_id,dev_eui,toa_teorico_ms,duty_cycle_rf_%,ocupacao_no_%,periodo_nominal_s,periodo_real_avg_s,interval_std_s,interval_gateway_avg_s,interval_delta_avg_ms,sr_teorico_ms,sr_avg_ms,sr_std_ms,sr_min_ms,sr_max_ms,sr_elevado_n,sr_elevado_%,link_margin_avg_db,link_margin_min_db,drift_ppm,residual_std_ms
-1,9e70e30d570f93f5,97.536,0.7,0.63,14.0,15.45,0.414,16.406,-956.0,1097.5,1450.1,414.2,1291,3913,98,7.41,70.1,44,9.5,80.05
-2,788410651972aca8,97.536,0.67,0.61,14.5,15.94,0.396,16.832,-892.0,1097.5,1440.1,395.5,1291,2902,88,6.83,63.5,40,7.92,75.72
-3,dc63358a5a95d62f,97.536,0.65,0.59,15.0,16.45,0.419,17.325,-875.0,1097.5,1452.3,419.2,1291,3941,95,7.58,71.7,45,7.53,79.48
-4,1573451f0dff21d1,97.536,0.63,0.58,15.5,16.91,0.339,17.455,-545.0,1097.5,1410.0,338.6,1289,2902,61,4.9,68.6,57,6.2,80.52

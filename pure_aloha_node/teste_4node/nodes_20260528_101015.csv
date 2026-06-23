@@ -1,2 +1,0 @@
-node_id,dev_eui,n_sessions,sf,bw_khz,toa_teorico_ms,transacao_real_avg_ms,tx_total,rx_total,collisions,pdr_%,collision_rate_%,rssi_mean_dBm,snr_mean_dB,link_margin_mean_dB
-1,9e70e30d570f93f5,1,10,125.0,616.448,709.6,19,19,0,100.0,0.0,-38.95,11.5,90.05
